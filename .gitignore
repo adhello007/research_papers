@@ -1,1 +1,3 @@
-unet_data/*
+*.gif
+*.jpg
+*.pyc
