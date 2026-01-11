@@ -4,11 +4,11 @@ from torch.utils.data import Dataset
 import numpy as np 
 
 class CaravanDataset(Dataset): 
-    def __init__(self, image_dir, mask_dir, transform=None): 
-        self.image_dir = image_dir 
-        self.mask_dir = mask_dir 
-        self.transform = transform 
-        self.images =  os.listdir(image_dir)
+    def __init__(self, image_dir, mask_dir, images_list, transform=None):
+        self.image_dir = image_dir
+        self.mask_dir = mask_dir
+        self.transform = transform
+        self.images = images_list
 
     def __len__(self): 
         return len(self.images)

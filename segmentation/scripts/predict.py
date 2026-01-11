@@ -5,72 +5,82 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import sys
 import os
-import matplotlib.pyplot as plt
+import random
 
-# Setup paths
+# Path Setup
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import config
 from src.model import Unet
 
-def predict_single_image(image_path, model_path, output_path="output.png"):
-    # 1. Load the High-Res Image
-    original_image = np.array(Image.open(image_path).convert("RGB"))
-    orig_height, orig_width = original_image.shape[:2]
+# --- CONFIGURATION ---
+TEST_IMG_DIR = "segmentation/data/test_images/" 
+OUTPUT_DIR = "segmentation/test_predictions/"    
+MODEL_PATH = "segmentation/checkpoints/checkpoint_v1.pth.tar"  
+NUM_IMAGES_TO_PREDICT = 10          
+OVERLAY_COLOR = (0, 255, 0)         
+OVERLAY_ALPHA = 0.4                 
 
-    # 2. Preprocess (Resize to Model Size)
+def run_test_inference():
+    # 1. Setup
+    if not os.path.exists(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR)
+        
+    device = config.DEVICE
+    model = Unet(in_channels=3, out_channels=1).to(device)
+    
+    # Load Weights
+    print(f"Loading model from {MODEL_PATH}...")
+    checkpoint = torch.load(MODEL_PATH, map_location=device)
+    model.load_state_dict(checkpoint["state_dict"])
+    model.eval()
+
+    # Get List of Images
+    all_images = os.listdir(TEST_IMG_DIR)
+    # Randomly select N images
+    selected_images = random.sample(all_images, min(len(all_images), NUM_IMAGES_TO_PREDICT))
+
+    #Transform (Resize Only)
     transform = A.Compose([
         A.Resize(height=config.IMAGE_HEIGHT, width=config.IMAGE_WIDTH),
         A.Normalize(mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0], max_pixel_value=255.0),
         ToTensorV2(),
     ])
-    
-    transformed = transform(image=original_image)
-    img_tensor = transformed["image"].unsqueeze(0).to(config.DEVICE) # Add batch dim
 
-    # 3. Load Model
-    model = Unet(in_channels=3, out_channels=1).to(config.DEVICE)
-    checkpoint = torch.load(model_path, map_location=config.DEVICE)
-    model.load_state_dict(checkpoint["state_dict"])
-    model.eval()
+    print(f"Running inference on {len(selected_images)} images...")
 
-    # 4. Inference
-    print(f"Running inference on {image_path}...")
-    with torch.no_grad():
-        logits = model(img_tensor)
-        probs = torch.sigmoid(logits)
-        # Binarize: 0 or 1
-        mask = (probs > 0.5).float()
+    #Inference Loop
+    for img_name in selected_images:
+        img_path = os.path.join(TEST_IMG_DIR, img_name)
+        
+        # Load Original High-Res Image
+        original_pil = Image.open(img_path).convert("RGB")
+        orig_w, orig_h = original_pil.size
+        
+        # Preprocess
+        original_np = np.array(original_pil)
+        transformed = transform(image=original_np)
+        img_tensor = transformed["image"].unsqueeze(0).to(device)
 
-    # 5. Post-process (Upscale Mask to Original Resolution)
-    # We move to CPU and convert to numpy
-    mask_np = mask.squeeze().cpu().numpy() # Shape: (160, 240)
-    
-    # Resize mask back to Original Size (Use Nearest Neighbor to keep edges sharp)
-    mask_img = Image.fromarray((mask_np * 255).astype(np.uint8))
-    mask_resized = mask_img.resize((orig_width, orig_height), resample=Image.NEAREST)
-    
-    # 6. Overlay and Save
-    # Create a nice visualization: Original Image + Green Overlay
-    mask_rgb = np.array(mask_resized)
-    
-    # Create an overlay (Green tint)
-    overlay = original_image.copy()
-    # Where mask is white (255), we add green color
-    # Green channel boost
-    overlay[mask_rgb == 255, 1] = 255 
-    
-    # Blend: 70% Original + 30% Green Overlay
-    blended = Image.fromarray(original_image).convert("RGBA")
-    overlay_img = Image.fromarray(overlay).convert("RGBA")
-    final_result = Image.blend(blended, overlay_img, alpha=0.3)
-    
-    final_result.save(output_path)
-    print(f"Saved result to {output_path}")
+        # Predict
+        with torch.no_grad():
+            preds = torch.sigmoid(model(img_tensor))
+            mask = (preds > 0.5).float()
+
+        # Post-Process (Resize Mask to Original Size)
+        mask_np = mask.cpu().squeeze().numpy()
+        mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8))
+        mask_resized = mask_pil.resize((orig_w, orig_h), resample=Image.NEAREST)
+
+        # 5. Create Overlay
+        color_layer = Image.new("RGB", (orig_w, orig_h), OVERLAY_COLOR)
+        
+        mask_resized_l = mask_resized.convert("L") # Ensure grayscale
+        overlay_img = Image.composite(color_layer, original_pil, mask_resized_l)
+        final_output = Image.blend(original_pil, overlay_img, OVERLAY_ALPHA)
+
+        save_path = os.path.join(OUTPUT_DIR, f"pred_{img_name}")
+        final_output.save(save_path)
+        print(f"Saved: {save_path}")
 
 if __name__ == "__main__":
-    # Example Usage
-    # Grab a random test image or define a specific path
-    TEST_IMG = "data/train_images/00087a6bd4dc_01.jpg" # Replace with a real path
-    CHECKPOINT = "my_checkpoint.pth.tar"
-    
-    predict_single_image(TEST_IMG, CHECKPOINT)
+    run_test_inference()

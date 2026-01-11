@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import sys
 import os
 
-# --- PATH SETUP ---
 # This adds the project root to python path so we can import 'src' and 'config'
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -19,8 +18,8 @@ def test_model_architecture():
     print("\n[1/2] Testing Model Architecture (The Plumbing)...")
     model = Unet(in_channels=3, out_channels=1).to(config.DEVICE)
     
-    # Create a dummy tensor matching your config size
-    # Shape: (Batch_Size, Channels, Height, Width)
+    # Create a dummy tensor matching the config size
+    # Shape: (Batch_Size, C, H, W)
     x = torch.randn((2, 3, config.IMAGE_HEIGHT, config.IMAGE_WIDTH)).to(config.DEVICE)
     
     try:
@@ -39,17 +38,16 @@ def test_model_architecture():
 def test_data_augmentation():
     print("\n[2/2] Testing Data Integrity (Visual Check)...")
     
-    # 1. Define Aggressive Transforms (Rotation) to verify mask moves with image
+    #  Define Aggressive Transforms (Rotation) to verify mask moves with image
     test_transform = get_train_transforms(config.IMAGE_HEIGHT, config.IMAGE_WIDTH)
 
-    # 2. Load Dataset
+    # Load Dataset
     dataset = CaravanDataset(
         image_dir=config.TRAIN_IMG_DIR,
         mask_dir=config.TRAIN_MASK_DIR,
         transform=test_transform,
     )
-    
-    # 3. Check if data exists
+
     if len(dataset) == 0:
         print(" FAILED: No images found. Check paths in config.py")
         sys.exit(1)
@@ -57,7 +55,6 @@ def test_data_augmentation():
     loader = DataLoader(dataset, batch_size=4, shuffle=True)
     images, masks = next(iter(loader))
 
-    # 4. Plotting
     fig, ax = plt.subplots(4, 2, figsize=(10, 15))
     for i in range(4):
         # Permute: (C, H, W) -> (H, W, C) for Matplotlib
@@ -79,7 +76,6 @@ def test_data_augmentation():
     print(" ACTION REQUIRED: Open this image. Ensure the white mask shape matches the car rotation.")
 
 if __name__ == "__main__":
-    # Ensure folders exist before running
     if not os.path.exists(config.TRAIN_IMG_DIR):
         print(f" Error: Directory not found: {config.TRAIN_IMG_DIR}")
     else:

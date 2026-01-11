@@ -1,6 +1,7 @@
 import torch
 import torchvision
-
+import pandas as pd 
+import os 
 def save_checkpoint(state, filename="my_checkpoint.pth.tar"):
     print("=> Saving checkpoint")
     torch.save(state, filename)
@@ -9,32 +10,52 @@ def load_checkpoint(checkpoint, model):
     print("=> Loading checkpoint")
     model.load_state_dict(checkpoint["state_dict"])
 
-def check_accuracy(loader, model, device="cuda"):
-    num_correct = 0
-    num_pixels = 0
+def log_to_csv(epoch, train_loss, val_loss, val_dice, best_dice, filename="training_log.csv"):
+    # Updated to include Validation Loss column
+    data = {
+        "Epoch": [epoch],
+        "Train Loss": [f"{train_loss:.5f}"],
+        "Val Loss": [f"{val_loss:.5f}"], 
+        "Val Dice": [f"{val_dice:.5f}"],
+        "Best Dice": [f"{best_dice:.5f}"]
+    }
+    df = pd.DataFrame(data)
+    if not os.path.isfile(filename):
+        df.to_csv(filename, index=False)
+    else:
+        df.to_csv(filename, mode='a', header=False, index=False)
+
+def get_val_metrics(loader, model, loss_fn, device="cuda"):
+    """
+    Calculates BOTH Validation Loss and Dice Score.
+    """
     dice_score = 0
+    total_val_loss = 0
     model.eval()
 
     with torch.no_grad():
         for x, y in loader:
             x = x.to(device)
-            y = y.to(device).unsqueeze(1)
-            preds = torch.sigmoid(model(x))
-            preds = (preds > 0.5).float()
+            y = y.to(device).unsqueeze(1) # Shape: (N, 1, H, W)
             
-            # Pixel-wise accuracy (Basic)
-            num_correct += (preds == y).sum()
-            num_pixels += torch.numel(preds)
+            # 'amp' for consistency, though strictly not needed for eval
+            with torch.amp.autocast('cuda'): 
+                logits = model(x)
+                # Calculate Validation Loss
+                loss = loss_fn(logits, y.float())
             
-            # Dice Score (Research Standard)
-            # Formula: (2 * |X intersect Y|) / (|X| + |Y|)
-            dice_score += (2 * (preds * y).sum()) / (
-                (preds + y).sum() + 1e-8
-            )
+            total_val_loss += loss.item()
 
-    print(f"Got {num_correct}/{num_pixels} with acc {num_correct/num_pixels*100:.2f}")
-    print(f"Dice score: {dice_score/len(loader)}")
+            # 2. Dice Calculation
+            preds = torch.sigmoid(logits)
+            preds = (preds > 0.5).float()
+            dice_score += (2 * (preds * y).sum()) / ((preds + y).sum() + 1e-8)
+
+    avg_val_loss = total_val_loss / len(loader)
+    avg_dice = dice_score / len(loader)
+    
     model.train()
+    return avg_val_loss, avg_dice.item()
 
 def save_predictions_as_imgs(loader, model, folder="saved_images/", device="cuda"):
     model.eval()
