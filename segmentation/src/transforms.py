@@ -3,7 +3,7 @@ from albumentations.pytorch import ToTensorV2
 
 def get_train_transforms(height, width):
     """
-    Returns the training transforms with data augmentation.
+    we returnn the training transforms with data augmentation.
     """
     return A.Compose(
         [
@@ -22,7 +22,7 @@ def get_train_transforms(height, width):
 
 def get_val_transforms(height, width):
     """
-    Returns the validation transforms (No augmentation, just resizing/normalization).
+    returns the validation transforms (no augs).
     """
     return A.Compose(
         [

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn 
 import torchvision.transforms.functional as TF 
 """
-We will use padding = 1 (to match input and output shapes) and add batch normalization (not in the original paper)
+wee will use padding = 1 (to match input and output shapes) and add batch normalization (not in the original paper)
 """
 class DoubleConv(nn.Module): 
     def __init__(self, in_channels: int, out_channels: int) -> None: 
@@ -49,7 +49,7 @@ class Unet(nn.Module):
     def forward(self, x): 
         skip_connections = []
         
-        #Encoder pass 
+        #Encoder pass. Because we used module list, we have to manually pass info from one layer to the next. 
         for down in self.downs: 
             x = down(x)
             skip_connections.append(x)
