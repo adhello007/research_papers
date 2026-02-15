@@ -1,1 +1,3 @@
-unet_data/*
+*.jpg
+*.gif
+*__pycache__
