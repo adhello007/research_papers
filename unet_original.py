@@ -7,20 +7,24 @@ import torch.nn.functional as F
     AND NO BATCH NORMALIZATION 
 ''' 
 
-
-
 class DoubleConv(nn.Module):
     def __init__(self, in_channels: int,out_channels: int) -> None:
         super().__init__()
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3), #unpadded convolutions 
-            nn.ReLU(inplace=True), #inplace=True helps save memory as it makes changes to the memory locations instead of making a copy. 
+            nn.ReLU(inplace=True), #inplace=True helps save memory as it makes changes to the original object of conv2d instead of making a copy. 
             nn.Conv2d(out_channels, out_channels, kernel_size=3), #unpadded convolutions 
             #the output of the second convolution is the same depth as the output of the first.
             nn.ReLU(inplace=True),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        is an unsaid but in built function in the nn module. when you create it, it 
+        essentially does the work of processing an input through the layers defined above
+        and essentially returning the result. It also keeps track of their weights and 
+        ensures auto differentiation correctly.
+        """
         return self.double_conv(x)
     
 
@@ -51,7 +55,7 @@ class Unet(nn.Module):
         self.dec1 = DoubleConv(128,64)
 
 
-        #final output layer of 1by 1 conv kernel
+        #final output layer of 1 by 1 conv kernel
         self.final_conv = nn.Conv2d(64,out_channels, kernel_size=1)
 
     def center_crop(self,enc_features: torch.Tensor, dec_features: torch.Tensor) -> torch.Tensor:
